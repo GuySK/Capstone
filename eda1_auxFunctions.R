@@ -444,11 +444,14 @@ skip.ngram <- function(x, n=2, window=3, split=" ", sep="::"){
 #
 # tryNgram - Gets ngrams from n-gram data frame taking encoded or plain words
 #
-tryNgram <- function(n=2, words){
-  if (class(words) == 'character')                          # encode words if necessary
-    words <- nCode(words)
-  df <- paste0('n', n, 'g_df')                              # point to n-gram data frame 
-  return(getNgram(get(df), words))
+tryNgram <- function(words, n = 2,  df = NULL){
+    if (class(words) == 'character')                      # encode words if necessary
+        words <- nCode(words)
+    if (is.null(df)) {
+        df <- paste0('n', n, 'g_df')                      # point to n-gram data frame 
+        df <- get(df)
+    }
+    return(getNgram(df, words))
 }
 #
 # updt.DF - Updates ngram data frames
