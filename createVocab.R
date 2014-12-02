@@ -32,7 +32,7 @@ if(ctrlList$removeStopWords[1]) {
   WRDS <- names(n1g_u[order(n1g_u, decreasing=T)])            # add elements to table  
 }
 
-cat('>>> End of script. \n')
+cat('>>> End of script --createVocab--. \n')
 # --- End of Script
 
 

@@ -1,5 +1,9 @@
+# 
+# trnsFuncts - Transformation functions
 #
+
 #
+# cleanDoc - Applies transformations to documents
 #
 cleanDoc <- function(x, control=list(convertTolower=c(TRUE, 1),
                                      verbose=FALSE,
@@ -65,5 +69,48 @@ cleanDoc <- function(x, control=list(convertTolower=c(TRUE, 1),
         cat('>>> End of Job. \n')
     return(x)
 }
-#
 
+#
+# cleanSent - Cleans a sentence according to options
+#
+cleanSent <- function(x, control=list(convertTolower=c(TRUE),
+                                     convertToASCII=TRUE,
+                                     removePunct=TRUE,
+                                     removeNumbers=TRUE,
+                                     removeStopWords=c(FALSE, NULL))) {
+    #
+    # cleanSent - Cleans a sentence according to options
+    #
+    
+    defaults <- list(convertTolower=c(TRUE), 
+                     convertToASCII=TRUE,
+                     removePunct=TRUE,
+                     removeNumbers=TRUE,
+                     removeStopWords=c(FALSE, NULL))
+    
+    for (i in 1:length(defaults)){
+        if (!(names(defaults)[i] %in% names(control)))
+            control <- append(control, defaults[i])
+    }
+    
+    if(control$convertTolower)
+        x <- tolower(x)
+
+    if (control$removeStopWords[1])
+        x <- removeWords(x, stopwords(control$removeStopWords[2]))        
+    
+    if (control$removeNumbers) {
+        x <- removeNumbers(x)
+    }
+
+    if (control$removePunct) {
+        x <- removePunctuation(x)
+    }
+    
+    if (control$convertToASCII) {
+        x <- toascii(x, encoding='UTF-8')        
+    }
+    
+    return(x)
+}
+#

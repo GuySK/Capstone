@@ -22,6 +22,17 @@ ngram_THRESH = 2;                     # Min frequency of ngrams to keep
 CHUNK_PROP = 0.1;                     # Default chunk size for chopping function
 # --------                            ------------------------------------------------
 
+cat('>>> Script settings. \n')
+cat('    AWS =', AWS, '\n')
+cat('    DSET =', DSET, '\n')
+cat('    TRAINPROP =', TRAINPROP, '\n')
+cat('    SEED_N =', SEED_N, '\n')
+cat('    nCode_STEPS =', nCode_STEPS, '\n')
+cat('    REC_LIMIT =', REC_LIMIT, '\n')
+cat('    EXPRS_N =', EXPRS_N, '\n')
+cat('    ngram_THRESH =', ngram_THRESH, '\n')
+cat('    CHUNK_PROP =', CHUNK_PROP, '\n')
+
 # ---
 cat(">>> Basic setup. \n")
 if (AWS) {
@@ -32,7 +43,7 @@ if (AWS) {
 
 source("./eda1_auxFunctions.R")
 source("./AuxFunctions.R")
-source("cleanDoc.R")
+source("trnsFuncts.R")
 source("Ngram_tf.R")
 
 library(tm)
