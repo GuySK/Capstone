@@ -11,9 +11,9 @@
 # --------                            ------------------------------------------------
 # Settings                            ---> Review Carefully before running script <---
 # --------                            ------------------------------------------------
-AWS = FALSE;                          # Computer running script: AWS or own
+AWS = TRUE;                           # Computer running script: AWS or own
 DSET = 1;                             # Blogs=1, News = 2, Tweets=3
-TRAINPROP = 0.01;                     # Proportion of data set to be used as training set
+TRAINPROP = 0.20;                     # Proportion of data set to be used as training set
 SEED_N = 191;                         # Seed for random operations
 nCode_STEPS = 10;                     # Number of steps to encode training data
 REC_LIMIT = 1;                        # Proportion of records to process in this run

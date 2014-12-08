@@ -1,4 +1,6 @@
 #
+# Functions used in training and prediction
+#
 library(tm)
 #
 # guessWord - Evaluates next word in sentence
