@@ -2,6 +2,9 @@
 # trnsFuncts - Transformation functions
 #
 
+# Alter stop words list order to avoid leaving orphan quotes
+myStopWords <- stopwords('en')[order(stopwords('en'), decreasing=T)]
+
 #
 # cleanDoc - Applies transformations to documents
 #
@@ -10,7 +13,7 @@ cleanDoc <- function(x, control=list(convertTolower=c(TRUE, 1),
                                      convertToASCII=TRUE,
                                      removePunct=TRUE,
                                      removeNumbers=TRUE,
-                                     removeStopWords=c(TRUE,'en'))) {
+                                     removeStopWords=c(TRUE, myStopWords))) {
     #
     # cleanDoc - standardizes several document cleaning tasks
     #
@@ -20,7 +23,7 @@ cleanDoc <- function(x, control=list(convertTolower=c(TRUE, 1),
                      convertToASCII=TRUE,
                      removePunct=TRUE,
                      removeNumbers=TRUE,
-                     removeStopWords=c(TRUE,'en'))
+                     removeStopWords=c(TRUE, myStopWords))
     
     for (i in 1:length(defaults)){
         if (!(names(defaults)[i] %in% names(control)))
@@ -44,7 +47,7 @@ cleanDoc <- function(x, control=list(convertTolower=c(TRUE, 1),
     if (control$removeStopWords[1]){
         if (control$verbose) 
             cat('>>> removing stop words. \n')
-        x <- removeWords(x, stopwords(control$removeStopWords[2]))        
+        x <- removeWords(x, control$removeStopWords[2])        
     }
     
     if (control$removeNumbers) {
@@ -97,7 +100,7 @@ cleanSent <- function(x, control=list(convertTolower=c(TRUE),
         x <- tolower(x)
 
     if (control$removeStopWords[1])
-        x <- removeWords(x, stopwords(control$removeStopWords[2]))        
+        x <- removeWords(x, control$removeStopWords[2])        
     
     if (control$removeNumbers) {
         x <- removeNumbers(x)

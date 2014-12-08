@@ -21,7 +21,7 @@ guessWord <- function(sentence) {
     words <- cleanSent(x = sentence, control = cntrl)
     
     # Replace unknown terms and encode
-    words <- repUnk(x = words, vocab = vocab)
+    # words <- repUnk(x = words, vocab = vocab)
     ncWords <- nCode(words)
     num_words <- length(ncWords)
     if (num_words == 0)
@@ -42,11 +42,37 @@ guessWord <- function(sentence) {
         res <- tryNgram(n = n, words =  ncWords[length(ncWords)])
         r2 <- c(n, res$W2[1:num_results], res$Count[1:num_results])        
     }
+    
+    # Try 1gram
+    r1 <- NULL
+    if (num_words >= 0){
+        n = 1;
+        # res <- tryNgram(n = n, words =  ncWords[length(ncWords)])
+        # 
+        r1 <- c(n, names(n1g)[1:num_results], n1g[1:num_results])        
+    }
+    
+    # remove stopwords
+    
+    cntrl <- list(convertTolower=c(TRUE),
+                  convertToASCII=TRUE,
+                  removePunct=TRUE,
+                  removeNumbers=TRUE,
+                  removeStopWords=c(TRUE, myStopWords))
+    
+    # Sentence cleansing
+    words <- cleanSent(x = sentence, control = cntrl)
 
+    # Replace unknown terms and encode
+    ncWords <- nCode(words)
+    num_words <- length(ncWords)
+    if (num_words == 0)
+        ncWords <- nCode('<UNK>')   
+    
     # Try skip digrams on previous 3 to 1 words
     n = 2;
     r21 = r22 = r23 <- 0
-
+    
     if (num_words > 1) {
         res <- tryNgram(n = n, words =  ncWords[length(ncWords)-1], df=n2s_df)
         r21 <- c(paste0(n,'s1'), res$W2[1:skip_num_results], res$Count[1:skip_num_results])        
@@ -60,14 +86,10 @@ guessWord <- function(sentence) {
         r23 <- c(paste0(n,'s3'), res$W2[1:skip_num_results], res$Count[1:skip_num_results])        
     }
     
-    # remove stopwords
-    
-    # Try skip digrams on previous 3 to 1 words
-    
     # Report Results
     
     # Testing output below
-    return(list(words, ncWords, r2, r3, r21, r22, r23))
+    return(list(words, ncWords, r1, r2, r3, r21, r22, r23))
 }
 
 #
@@ -82,7 +104,7 @@ trainer <- function(x, tdf) {
     #
     
     MAX_NW = 10;    # max number of words to save in training data set
-    sents = guessed = n2g = n3g = n2s1 = n2s2 = n2s3 = c()        # storing vectors  
+    sents = guessed = n1g = n2g = n3g = n2s1 = n2s2 = n2s3 = c()    # storing vectors  
     
     # Create new data frame if not existing or not specified
     if ((missing(tdf) | !((deparse(substitute(tdf)) %in% ls(envir = .GlobalEnv))))){
@@ -105,15 +127,16 @@ trainer <- function(x, tdf) {
         # save results
         sents <- append(sents, sent)
         guessed <- append(guessed,wordToGuess)
-        n2g <- append(n2g, paste(res[[3]][2:length(res[[3]])], collapse='-'))
-        n3g <- append(n3g, paste(res[[4]][2:length(res[[4]])], collapse='-'))
-        n2s1 <- append(n2s1, paste(res[[5]][2:length(res[[5]])], collapse='-'))
-        n2s2 <- append(n2s2, paste(res[[6]][2:length(res[[6]])], collapse='-'))
-        n2s3 <- append(n2s3, paste(res[[7]][2:length(res[[7]])], collapse='-'))
+        n1g <- append(n1g, paste(res[[3]][2:length(res[[3]])], collapse='-'))
+        n2g <- append(n2g, paste(res[[4]][2:length(res[[4]])], collapse='-'))
+        n3g <- append(n3g, paste(res[[5]][2:length(res[[5]])], collapse='-'))
+        n2s1 <- append(n2s1, paste(res[[6]][2:length(res[[6]])], collapse='-'))
+        n2s2 <- append(n2s2, paste(res[[7]][2:length(res[[7]])], collapse='-'))
+        n2s3 <- append(n2s3, paste(res[[8]][2:length(res[[8]])], collapse='-'))
     }
     
     # update data frame and go back
-    return(rbind(tdf, data.frame(sents, guessed, n2g, n3g, n2s1, n2s2, n2s3, 
+    return(rbind(tdf, data.frame(sents, guessed, n1g, n2g, n3g, n2s1, n2s2, n2s3, 
                                  stringsAsFactors=F))) 
 }
 #

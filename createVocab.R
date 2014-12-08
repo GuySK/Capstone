@@ -12,13 +12,19 @@ n1g <- ngramLst[[1]]
 n1gp <- ngramLst[[2]]
 T1 <- length(n1g)    # Number of Types
 N1 <- sum(n1g)       # Number of tokens
+# n1d <- hash(names(n1g), n1g) # convert to dict format
 
 # --- Replacing unfrequent terms as unknown
 cat('>>> Replacing unfrequent terms as unknown. \n')
-q003 <- qxdist(n1g, 0.03) # 3% quantile computed here
-n1g <- n1g[order(n1g)]    # sort words in counts asc order 
-n1g_u <- n1g[as.integer(q003 * length(n1g)):length(n1g)]    # get rid of terms of low freq
-n1g_u <- append(0.03 * sum(n1g), n1g_u)                     # add corresponding count
+if (UNK_LMT > 0) {
+    qlmt <- qxdist(n1g, UNK_LMT)                            # quantile computed here
+} else {
+    qlmt <- 0                                               # no replacements
+}
+n1g <- n1g[order(n1g)]                                      # sort words in asc order 
+n1g_u <- n1g[as.integer(qlmt * length(n1g) +1):length(n1g)] # get rid of low frq terms
+unkcount <- as.integer(UNK_LMT * sum(n1g))                  # compute <UNK> count
+n1g_u <- append(unkcount, n1g_u)                            # add corresponding count
 names(n1g_u)[1] <- '<UNK>'                                  # add name as <UNK>
 n1g_u <- n1g_u[order(n1g_u)]                                # restore order
 
