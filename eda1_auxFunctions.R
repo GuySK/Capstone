@@ -375,7 +375,8 @@ getNgram <- function(x, words, decoded=TRUE){
             } else {
                 
                 if(length(words) >= 1) {
-                    y <- with(x, x[W1 == words[1],])                     # for words        
+                    y <- with(x, x[W1 == words[1],])                       # for words                    
+                    # y <- with(x, x[W1 == words[1],])                     # for words        
                 } else {
                     return(NULL)
                 }
@@ -425,6 +426,32 @@ dCode <- function(x, vocab=WRDS){
         z <- append(z, xd)
     }
     return(z)
+}
+#
+# nCode2 - Encodes / decodes a word vector using hash package's functions.
+#          Replaces functions nCode and dCode.
+#
+nCode2 <- function(x, vocab=WRDS_H, unkMark='<UNK>', 
+                   decode=FALSE, vocab_dec=WRDS_H_INV){
+    #
+    # Encodes or decodes a vector of words. If decode = TRUE, 
+    # an inverted hash table must be specified as vocab.
+    # Returns a vector of encoded / decoded words.
+    #
+    
+    if(!decode)                                        # if encoding...
+        x <- ngram(x, 1)                               # convert to word vector
+    
+    if (decode) {
+        vocab <- vocab_dec                             # use inverted hash table and...
+        x <- as.character(x)                           # convert to char for decoding
+    }                                                  
+    
+    not_found <-!(has.key(x, vocab))                   # identify words without code and..,
+    x[not_found] <- unkMark                            # replace unknown words with special tag
+    res <- sapply(x, function(y){vocab[[y]]})          # get codes    
+    names(res) <- NULL                                 # remove names
+    return(res)                                        # and go home.
 }
 #
 # skip.ngram - Creates bigrams within a specified window size
@@ -497,5 +524,75 @@ updt.DF <- function(x, y){
   # Return updated data frame in order
   return(x[order(x$Count, decreasing=T),])
 }
+
 #
+# updt.DF - Updates ngram data frames - vectorized version - 
+#
+updt.DF <- function(x, y, test=FALSE){
+    # Takes a ngram freq df of type nig_df (i=1,2,3...) and a term freq vector.
+    # Returns a data frame of the right type with counts updated and new keys added.
+    
+    # to vectorize df update
+    yinKeys <- names(y) %in% x$Key                        # y entries already in x
+    xinKeys <- x$Key %in% names(y)                        # same from x point of view
+    
+    # Update existing keys
+    x$Count[xinKeys] <- x$Count[xinKeys] + y[yinKeys]     # increment existing counters
+    
+    # Add non existing keys
+    tot2add <- sum(!yinKeys)                              # Nr of rows to add
+    if (tot2add > 0) {                                    # rbind without rows result in error
+        x <- rbind(x, ngram.DF(y[!yinKeys]), row.names=NULL)
+        rownames(x) <- NULL
+        if (test)
+            cat('>>>', tot2add, 'row(s) added to df. \n') # inform nr of rows added
+    }
+    
+    # Return updated data frame in order
+    return(x[order(x$Key, decreasing=F),])                # return new df in key order
+}
+#
+# updt.Vocab - Updates Vocabulary
+#
+updt.Vocab <- function(x, Vocab=WRDS, test=FALSE) {
+    #
+    # Takes a character vector and adds inexisting words to Vocab
+    #
+    words <- ngram(x, 1)
+    new_words <- !(words %in% Vocab)
+    
+    strt <- length(Vocab) + 1
+    end <- strt + sum(new_words) - 1
+    if (end >= strt)
+        Vocab[strt:end] <- words[new_words]
+    
+    if(test)
+        cat('>>>', sum(new_words), 'words added. \n')
+    
+    return(Vocab)
+}
+#
+# updt.Vocab - Using hash package...
+#
+updt.Vocab <- function(x, Vocab=WRDS_H, Vocab_inv=WRDS_H_INV, test=FALSE) {
+    #
+    # Takes a character vector of words and adds inexisting ones 
+    # to Vocab abd to the inverted Vocab hast table.
+    # Returns the number of words actually added.
+    #
+    
+    new_words <- !(has.key(x, Vocab))               # identify words to add  
+    strt <- max(values(Vocab)) + 1                  # compute range of new values
+    end <- strt + sum(new_words) - 1
+    
+    if (end >= strt) {                              # add new words 
+        Vocab[x[new_words]] <- strt:end             # to Vocab
+        Vocab_inv[strt:end] <- x[new_words]         # and inverted Vocab
+    }                                
+    
+    if (test)                                       # useful for testing
+        cat('>>> Words added:', paste(x[new_words], collapse='-'), '\n')
+    
+    return(sum(new_words))                          # Nr of words added
+}
 
