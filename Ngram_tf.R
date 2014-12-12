@@ -1,7 +1,14 @@
 #
 # Ngram.tf - Ngram Term Frequency
 #
-Ngram.tf <- function(x, n=2, fun=ngram, threshold=3, clk=0.05, chunkSize=0.1) {
+Ngram.tf <- function(x, n=2, 
+                     fun=ngram2, 
+                     encoded = FALSE,
+                     encode = TRUE,
+                     window = 3,
+                     threshold=3, 
+                     clk=0.05, 
+                     chunkSize=0.1) {
     #
     # Takes a character vector and returns a list with two vectors 
     # with n-grams counts and probabilities.
@@ -10,7 +17,12 @@ Ngram.tf <- function(x, n=2, fun=ngram, threshold=3, clk=0.05, chunkSize=0.1) {
     strtTime <- Sys.time()
     
     cat('>>> Creating', paste0(n, '-grams'), '\n')
-    ngrams <- sapply(x, fun, n=n)                     # default ngram generator is ngram
+    ngrams <- sapply(x, fun, 
+                     n=n, 
+                     encoded=encoded,
+                     encode=encode,
+                     window=window)       
+    
     ngrams <- unlist(ngrams)
     names(ngrams) <- NULL
     cat('   ', length(ngrams), 'terms generated. \n')

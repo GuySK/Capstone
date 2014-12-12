@@ -4,6 +4,19 @@
 
 # Alter stop words list order to avoid leaving orphan quotes
 myStopWords <- stopwords('en')[order(stopwords('en'), decreasing=T)]
+myStopWords <- append(myStopWords, c('xxcommaxx', 'xxstopxx', 'xxcolon'))
+
+#
+# convertPunct - Keeps chars to be taken into account by ngrams gens
+#
+convertPunct <- function(x){
+    # Takes a string and returns a string.    
+    x <- gsub(pattern = ", ", " xxcommaxx ", x)
+    x <- gsub(pattern = "\\. |; |! ", " xxstopxx ", x)
+    x <- gsub(pattern = ": ", " xxcolonxx ", x)        
+    return(x)
+}
+
 
 #
 # cleanDoc - Applies transformations to documents
@@ -35,6 +48,9 @@ cleanDoc <- function(x, control=list(convertTolower=c(TRUE, 1),
         if (control$verbose)
             cat('---', names(control)[i], unlist(control[[i]]), '\n')        
     }
+    if (control$verbose) 
+        cat('>>> Converting special characters. \n')    
+    x <- convertPunct(x)
     
     if(control$convertTolower[1]) {
         if (control$verbose) 
@@ -95,6 +111,8 @@ cleanSent <- function(x, control=list(convertTolower=c(TRUE),
         if (!(names(defaults)[i] %in% names(control)))
             control <- append(control, defaults[i])
     }
+
+    x <- convertPunct(x)
     
     if(control$convertTolower)
         x <- tolower(x)

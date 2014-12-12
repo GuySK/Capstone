@@ -1,18 +1,24 @@
 # Vocab Creation script
 # Assumes data set in variable 'dset'
 
-# --- Cleaning training set
-
-trData <- dset[train]
-trData <- cleanDoc(x=trData, control=ctrlList)
+action <- 'Updating'
+if(CREATE_VOCAB)
+    action <- 'Creating'
+cat('>>> ', action, 'Vocabulary. \n')
 
 # --- Creating word list
-ngramLst <- Ngram.tf(x = trData, n = 1, threshold = 2, chunkSize = 0.1)
+ngramLst <- Ngram.tf(x = trData,
+                     fun = ngram2,
+                     n = 1,
+                     encoded = FALSE,
+                     encode = FALSE,
+                     threshold = 2, 
+                     chunkSize = 0.1)
+
 n1g <- ngramLst[[1]]
 n1gp <- ngramLst[[2]]
 T1 <- length(n1g)    # Number of Types
 N1 <- sum(n1g)       # Number of tokens
-# n1d <- hash(names(n1g), n1g) # convert to dict format
 
 # --- Replacing unfrequent terms as unknown
 cat('>>> Replacing unfrequent terms as unknown. \n')

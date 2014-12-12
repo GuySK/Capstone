@@ -41,13 +41,13 @@ step <- function(x, fun, steps=1, ...){
     recs <- length(x) %/% steps
     lst_y <- list()
     for (i in 1:steps){
-        cat(">>> Step ", i,".\n", sep="")
+        cat("    Step ", i,". ", sep="")
         init <- 1 + (i-1) * recs
         if (i == steps)
             recs = recs + length(x) %% steps
         y <- fun(x[init:(init + recs - 1)], ...)
         lst_y <- append(lst_y, list(y))
-        cat(">>>", recs, "records processed in this step. \n")
+        cat(recs, "records processed in this step. \n")
     }
     lst_y    
 }
@@ -335,25 +335,95 @@ convTime <- function(x) {
 }
 #
 # ngram.DF - Creates a data frame from a dict of term frequencies
+#            New version. Replace the one above.  
 #
 ngram.DF <- function(x, encoded=TRUE) {
-  # Creates a data frame from a dict of frequencies
-  k <- names(x)
-  lk <- strsplit(k, '::')
-  w <- matrix(data=NA, nrow=length(x), ncol=length(lk[[1]]))
-  for (i in 1:length(lk[[1]])){
-    w[,i] <- unlist(lapply(lk, function(x){x[i]}))
-  }
-  count <- x
-  df <- data.frame(Key=k, Count=count, row.names=NULL, stringsAsFactors = FALSE)
-  for (i in 1:ncol(w)){
-    col <- w[,i]
-    if (encoded)
-      col <- as.numeric(as.character(w[,i]))
-    df <- data.frame(df, col, stringsAsFactors = FALSE)
-    colnames(df)[2+i] <- paste0('W',i)
-  }
-  return(df)
+    # Creates a data frame from a dict of frequencies
+    
+    k <- as.double(names(x))                # ngram code as key
+    w <- sapply(k, dCodeNgram)              # get a matrix with ngram words as rows 
+    
+    if (class(w) != 'matrix'){              # but check if it's a vector
+        n <- 1                              # yep. it's an 1-gram
+    } else {                                # nope. bigram or greater ngram
+        n <- nrow(w)                        # number of words in ngram
+    }
+    
+    df <- data.frame(Key=k, Count=x,        # init data frame with key and frequencies
+                     row.names=NULL, 
+                     stringsAsFactors = FALSE)
+    
+    if (n == 1) {                           # for just words add a single column
+        df <- data.frame(df, w, stringsAsFactors = FALSE)
+        colnames(df)[3] <- 'W1'             # column name
+    } else {                                # for high orded ngrams we need a loop
+        for (i in 1:n){                     # add columns for each word in the ngram
+            df <- data.frame(df, w[i,],     
+                             stringsAsFactors = FALSE)
+            colnames(df)[2+i] <- paste0('W',i)  # add name to data frame column
+        }
+    }
+    return(df)                              # done, go home.
+}
+#
+# ngram.DF - Creates a data frame from a dict of term frequencies
+#            New version. Replace the one above.  
+#
+ngram.DF <- function(x, encoded=TRUE, sep='::') {
+    
+    # Creates a data frame from a dict of frequencies
+    
+    if (encoded) {
+        k <- as.double(names(x))                # ngram code as key
+        w <- sapply(k, dCodeNgram)              # get a matrix with ngram words as rows 
+        
+        if (class(w) != 'matrix'){              # but check if it's a vector
+            n <- 1                              # yep. it's an 1-gram
+        } else {                                # nope. bigram or greater ngram
+            n <- nrow(w)                        # number of words in ngram
+        }
+        
+        df <- data.frame(Key=k, Count=x,        # init data frame with key and frequencies
+                         row.names=NULL, 
+                         stringsAsFactors = FALSE)
+        
+        if (n == 1) {                           # for just words add a single column
+            df <- data.frame(df, w, stringsAsFactors = FALSE)
+            colnames(df)[3] <- 'W1'             # column name
+        } else {                                # for high orded ngrams we need a loop
+            for (i in 1:n){                     # add columns for each word in the ngram
+                df <- data.frame(df, w[i,],     
+                                 stringsAsFactors = FALSE)
+                colnames(df)[2+i] <- paste0('W',i)  # add name to data frame column
+            }
+        }
+        
+    } else {                                    # ngrams are not encoded
+        k <- names(x)                           # get keys
+        lk <- strsplit(k, sep)                  # split words
+        w <- matrix(data=NA, nrow=length(x),    # create matrix 
+                    ncol=length(lk[[1]]))
+        
+        for (i in 1:length(lk[[1]])){           # unlist columns into matrix
+            w[,i] <- unlist(lapply(lk, function(x){x[i]}))
+        }
+        
+        count <- x                              # init data frame with keys and freq
+        df <- data.frame(Key=k, Count=count, 
+                         row.names=NULL, 
+                         stringsAsFactors = FALSE)
+        
+        for (i in 1:ncol(w)){                  # add columns to df
+            col <- w[,i]
+            if (encoded)                       # ensure word as numeric if encoded
+                col <- as.numeric(as.character(w[,i]))
+            df <- data.frame(df, col,          # add column to df 
+                             stringsAsFactors = FALSE)
+            colnames(df)[2+i] <- paste0('W',i) # give column a name
+        }
+    }
+    
+    return(df)                                 # done. go home.
 }
 # 
 # getNgram - gets ngrams from an ngram data frame
@@ -453,7 +523,10 @@ nCode2 <- function(x, vocab=WRDS_H, unkMark='<UNK>',
     names(res) <- NULL                                 # remove names
     return(res)                                        # and go home.
 }
-#
+
+# a shorthand version for decoding
+dCode <- function(x) {nCode2(x, decode=T)}  
+
 # skip.ngram - Creates bigrams within a specified window size
 #
 skip.ngram <- function(x, n=2, window=3, split=" ", sep="::"){
@@ -535,7 +608,7 @@ updt.DF <- function(x, y, test=FALSE){
     # to vectorize df update
     yinKeys <- names(y) %in% x$Key                        # y entries already in x
     xinKeys <- x$Key %in% names(y)                        # same from x point of view
-    
+        
     # Update existing keys
     x$Count[xinKeys] <- x$Count[xinKeys] + y[yinKeys]     # increment existing counters
     
@@ -549,7 +622,9 @@ updt.DF <- function(x, y, test=FALSE){
     }
     
     # Return updated data frame in order
-    return(x[order(x$Key, decreasing=F),])                # return new df in key order
+    return(list(added = tot2add, 
+                updted = sum(yinKeys), 
+                df = x[order(x$Key, decreasing=F),]))     # return new df in key order
 }
 #
 # updt.Vocab - Updates Vocabulary
