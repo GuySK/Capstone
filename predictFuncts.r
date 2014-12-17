@@ -2,6 +2,30 @@
 # Functions used in training and prediction
 #
 library(tm)
+
+#
+# getNgram - Retrieves most frequent n-grams from n-1 words
+#
+getNgram <- function(words, top=10, skip=FALSE){
+    #
+    # Takes a vector of words and returns the most frequent ngrams
+    #
+                                                          # identify proper dataframe
+    n <- length(words) + 1                                # ngram order
+    dftype <- 'g'                                         # ngram data frame
+    if (skip)                                             # or skip data frame
+        dftype <- 's'
+    
+    df <- paste0('n', n, dftype, 'n_df')                  # build df name
+    df <- get(df)                                         # and get object
+
+    searchKey <- nCodeNgram(words)                        # create secondary key
+    res <- df[df$Skey == searchKey,]                      # go get it
+    top <- min(top, nrow(res))                            # limit results to those available
+    
+    return(res[order(res$Count, decreasing = T)[1:top],]) # return ordered
+}
+
 #
 # guessWord - Evaluates next word in sentence
 #
@@ -24,74 +48,41 @@ guessWord <- function(sentence) {
     
     # Replace unknown terms and encode
     # words <- repUnk(x = words, vocab = vocab)
-    ncWords <- nCode(words)
-    num_words <- length(ncWords)
-    if (num_words == 0)
-       ncWords <- nCode('<UNK>')   
+    words <- ngram2(words, 1, encode=F)         # get a vector of words
+    n <- length(words)
     
-    # Try 3gram on previous two words
-    r3 <- NULL
-    if (num_words >= 2) {
-        n = 3;
-        res <- tryNgram(n = n, words = ncWords[(num_words - 1):num_words])
-        r3 <- c(n, res$W3[1:num_results], res$Count[1:num_results])
-    }
-    
-    # Try 2gram on previous word
-    r2 <- NULL
-    if (num_words >= 1){
-        n = 2;
-        res <- tryNgram(n = n, words =  ncWords[length(ncWords)])
-        r2 <- c(n, res$W2[1:num_results], res$Count[1:num_results])        
-    }
-    
-    # Try 1gram
-    r1 <- NULL
-    if (num_words >= 0){
-        n = 1;
-        # res <- tryNgram(n = n, words =  ncWords[length(ncWords)])
-        # 
-        r1 <- c(n, names(n1g)[1:num_results], n1g[1:num_results])        
-    }
-    
+    m <- 2
+    allres <- data.frame()
+    for (i in 1:m) {
+        if (n <=  i-1)
+            break
+        res <- getNgram(words[(n-i+1):n])
+        res <- cbind(N = i, W = res[,4+i], C = res[,2])
+        allres <- rbind(allres, res)
+    }    
+        
     # remove stopwords
     
     cntrl <- list(convertTolower=c(TRUE),
                   convertToASCII=TRUE,
                   removePunct=TRUE,
                   removeNumbers=TRUE,
-                  removeStopWords=c(TRUE, myStopWords))
+                  removeStopWords=c(TRUE, 'myStopWords'))
     
     # Sentence cleansing
     words <- cleanSent(x = sentence, control = cntrl)
 
-    # Replace unknown terms and encode
-    ncWords <- nCode(words)
-    num_words <- length(ncWords)
-    if (num_words == 0)
-        ncWords <- nCode('<UNK>')   
-    
-    # Try skip digrams on previous 3 to 1 words
-    n = 2;
-    r21 = r22 = r23 <- 0
-    
-    if (num_words > 1) {
-        res <- tryNgram(n = n, words =  ncWords[length(ncWords)-1], df=n2s_df)
-        r21 <- c(paste0(n,'s1'), res$W2[1:skip_num_results], res$Count[1:skip_num_results])        
-    }
-    if (num_words > 2) {
-        res <- tryNgram(n = n, words =  ncWords[length(ncWords)-2], df=n2s_df)
-        r22 <- c(paste0(n,'s2'), res$W2[1:skip_num_results], res$Count[1:skip_num_results])        
-    }
-    if (num_words > 3) {
-        res <- tryNgram(n = n, words =  ncWords[length(ncWords)-3], df=n2s_df)
-        r23 <- c(paste0(n,'s3'), res$W2[1:skip_num_results], res$Count[1:skip_num_results])        
+    m = 3
+    for (i in 1:m){
+        if (n <=  i-1)
+            break
+        res <- getNgram(words[n-i+1], skip=T)
+        res <- cbind(N = paste0('2s',i), W = res[,5], C = res[,2])
+        allres <- rbind(allres, res)        
     }
     
     # Report Results
-    
-    # Testing output below
-    return(list(words, ncWords, r1, r2, r3, r21, r22, r23))
+    return(allres)
 }
 
 #
@@ -115,27 +106,26 @@ trainer <- function(x, tdf) {
     }
         
     for (i in 1:length(x)){
-        words <- ngram(x[i], 1)                                   # get words
-        if (length(words) < 2)                                    # not small ones
+        
+        words <- ngram2(x[i], 1)                                  # get words
+        
+        if (length(words) < 2)                                    # not shorties
             next
+        
         toGuess <- sample(2:(length(words) - 1), 1)               # choose a random word
         wordToGuess <- words[toGuess]                             # Word to predict
         strt <- (toGuess - 1) - MAX_NW + 1                        # save sentence from here 
+        
         if (strt < 1)                                            
             strt <- 1                                             # if sentence too short
+        
         sent <- paste(words[strt:(toGuess - 1)], collapse = ' ')  # save sentence
         res <- guessWord(sent)                                    # pass sentence to predictor
 
         # save results
-        sents <- append(sents, sent)
-        guessed <- append(guessed,wordToGuess)
-        n1g <- append(n1g, paste(res[[3]][2:length(res[[3]])], collapse='-'))
-        n2g <- append(n2g, paste(res[[4]][2:length(res[[4]])], collapse='-'))
-        n3g <- append(n3g, paste(res[[5]][2:length(res[[5]])], collapse='-'))
-        n2s1 <- append(n2s1, paste(res[[6]][2:length(res[[6]])], collapse='-'))
-        n2s2 <- append(n2s2, paste(res[[7]][2:length(res[[7]])], collapse='-'))
-        n2s3 <- append(n2s3, paste(res[[8]][2:length(res[[8]])], collapse='-'))
-    }
+        res <- cbind(Sent = sent, Word = toGuess) ...<------- up to here...
+        allres <- rbind(allres, res)
+  }
     
     # update data frame and go back
     return(rbind(tdf, data.frame(sents, guessed, n1g, n2g, n3g, n2s1, n2s2, n2s3, 

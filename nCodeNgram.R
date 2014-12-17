@@ -22,7 +22,9 @@ nCodeNgram <- function(words, encoded=FALSE){
     return(ngram)
 }
 
-dCodeNgram <- function(ngram){
+dCodeNgram <- function(ngram, 
+                       decode=TRUE, 
+                       subngram=FALSE){
     #
     # Takes an ngram encoded with the nCodeNgram function.
     # Returns a character vector with the ngram words.
@@ -33,10 +35,22 @@ dCodeNgram <- function(ngram){
     
     ngram <- as.double(ngram)               # Just in case
     
+    if (subngram) {                               # (n-1)ngram required
+        words <- dCodeNgram(ngram, decode=F)      # get words
+        words <- words[1:(length(words) - 1)]     # take the first n-1
+        if (decode)                               # return it decoded 
+            return(dCode(words))              
+        return(nCodeNgram(words, encoded = T))    # return (n-1)ngram encoded
+    }
+    
     while(ngram > 0){                       # loop until no more words to extract
         w <- append(w, ngram %% shiftVal)   # apply modulo to extract word
         ngram <- ngram %/% shiftVal         # shift ngram code and repeat
     }
-    return(dCode(w))                        # decode and go home.
+        
+    if (decode)
+        w <- dCode(w)
+    
+    return(w)                               # done. go home.
 }
 #

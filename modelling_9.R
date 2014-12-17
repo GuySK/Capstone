@@ -23,8 +23,8 @@ CHUNK_PROP = 0.1;                     # Default chunk size for chopping function
 UNK_LMT = 0.005;                      # quantile limit to replace for <UNK>
 VOCAB = 'WRDS_H'                      # Name of hash table used as Vocab
 VOCAB_INV = 'WRDS_H_INV'              # Name of inverted hash table vocabulary
-TOT_RUNS = 100;                       # Total number of training runs
-RUN_NR = 6;                           # Current run number       
+TOT_RUNS = 100;                        # Total number of training runs
+RUN_NR = 3;                           # Current run number       
 # --------                            ------------------------------------------------
 
 cat('>>> Script settings. \n')
@@ -41,9 +41,6 @@ cat('    VOCAB =', VOCAB, '\n')
 cat('    VOCAB_INV =', VOCAB_INV, '\n')
 cat('    TOT_RUNS =', TOT_RUNS, '\n')
 cat('    RUN_NR =', RUN_NR, '\n')
-
-# --- Check if Params ok
-pause("Continue?")     
 
 # ---
 cat(">>> Basic setup. \n")
@@ -63,6 +60,11 @@ source("./AWS/Ngram_tf.R")
 source("./AWS/ngram2.R")
 source("./AWS/skip_ngram2.R")
 source("./AWS/nCodeNgram.R")
+
+# --- Check if Run Nr and Params ok
+if (exists('LAST_RUN'))
+    cat('>>> Last RUN Found is ', LAST_RUN, '. \n', sep='')
+pause("Continue?")     
 
 # --- increase options setting for recursive functions
 options(expressions=EXPRS_N)
@@ -200,7 +202,9 @@ T1n <- length(n1gn)                                 # Number of Types
 N1n <- sum(n1gn)                                    # Number of tokens
 
 if (RUN_NR == 1) {
-    n1gn_df <- ngram.DF(n1gn_df, n1gn)              # create data frame    
+    n1gn_df <- ngram.DF(n1gn)                       # create data frame
+    n1gn_added <- length(n1gn)
+    n1gn_updted <- 0
 } else {
     res <- updt.DF(n1gn_df, n1gn)                   # update data frame
     n1gn_df <- res$df            
@@ -225,6 +229,8 @@ N2n <- sum(n2gn)           # Number of tokens
 
 if (RUN_NR == 1) {
     n2gn_df <- ngram.DF(n2gn)                       # create data frame    
+    n2gn_added <- length(n2gn)
+    n2gn_updted <- 0    
 } else {
     res <- updt.DF(n2gn_df, n2gn)                   # update data frame
     n2gn_df <- res$df
@@ -249,6 +255,8 @@ N3n <- sum(n3gn)       # Number of tokens
 
 if (RUN_NR == 1) {
     n3gn_df <- ngram.DF(n3gn)                       # create data frame
+    n3gn_added <- length(n3gn)
+    n3gn_updted <- 0
 } else {
     res <- updt.DF(n3gn_df, n3gn)                   # update data frame
     n3gn_df <- res$df
@@ -282,6 +290,8 @@ N2sn<- sum(n2sn)
 
 if (RUN_NR == 1) {
     n2sn_df <- ngram.DF(n2sn)                       # create data frame
+    n2sn_added <- length(n2sn)
+    n2sn_updted <- 0
 } else {
     res <- updt.DF(n2sn_df, n2sn)                   # update data frame
     n2sn_df <- res$df
@@ -308,5 +318,12 @@ cat('Trigrams added: ', n3gn_added,
 cat('Skip Bigrams added: ', n2sn_added,
     '. Updated: ', n2sn_updted,
     '. Total: ', nrow(n2sn_df), '. \n', sep='')
+
+# --- Save run and environment
+LAST_RUN <- RUN_NR
+env_name <- paste0('./env_run_', RUN_NR, '.RData')
+cat('Saving environment as ', env_name, 
+    '. This may take some time. \n', sep='')
+save.image(env_name)
 
 # --- End of script 

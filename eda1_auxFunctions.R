@@ -375,6 +375,9 @@ ngram.DF <- function(x, encoded=TRUE, sep='::') {
     
     if (encoded) {
         k <- as.double(names(x))                # ngram code as key
+        sk <- sapply(k, dCodeNgram,             # get n-1 ngrams 
+                     subngram=T,                # to use as search keys
+                     decode = F)
         w <- sapply(k, dCodeNgram)              # get a matrix with ngram words as rows 
         
         if (class(w) != 'matrix'){              # but check if it's a vector
@@ -382,19 +385,25 @@ ngram.DF <- function(x, encoded=TRUE, sep='::') {
         } else {                                # nope. bigram or greater ngram
             n <- nrow(w)                        # number of words in ngram
         }
-        
-        df <- data.frame(Key=k, Count=x,        # init data frame with key and frequencies
-                         row.names=NULL, 
-                         stringsAsFactors = FALSE)
-        
+                
         if (n == 1) {                           # for just words add a single column
-            df <- data.frame(df, w, stringsAsFactors = FALSE)
-            colnames(df)[3] <- 'W1'             # column name
-        } else {                                # for high orded ngrams we need a loop
+            df <- data.frame(Key=k,             # and init data frame
+                             Count=x,           # with no sub key
+                             row.names=NULL, 
+                             stringsAsFactors = FALSE)            
+            df <- data.frame(df, w, stringsAsFactors = FALSE) # add words
+            colnames(df)[3] <- 'W1'             # and column name
+            
+        } else {                                # for high orded ngrams 
+            df <- data.frame(Key=k,             # init data frame with sub key
+                             Count=x, 
+                             Skey=sk,    
+                             row.names=NULL, 
+                             stringsAsFactors = FALSE)
             for (i in 1:n){                     # add columns for each word in the ngram
                 df <- data.frame(df, w[i,],     
                                  stringsAsFactors = FALSE)
-                colnames(df)[2+i] <- paste0('W',i)  # add name to data frame column
+                colnames(df)[3+i] <- paste0('W',i)  # add name to data frame column
             }
         }
         
@@ -404,7 +413,7 @@ ngram.DF <- function(x, encoded=TRUE, sep='::') {
         w <- matrix(data=NA, nrow=length(x),    # create matrix 
                     ncol=length(lk[[1]]))
         
-        for (i in 1:length(lk[[1]])){           # unlist columns into matrix
+        for (i in 1:length(lk[[1]])){           # unlist columns into matrix 
             w[,i] <- unlist(lapply(lk, function(x){x[i]}))
         }
         
@@ -424,44 +433,6 @@ ngram.DF <- function(x, encoded=TRUE, sep='::') {
     }
     
     return(df)                                 # done. go home.
-}
-# 
-# getNgram - gets ngrams from an ngram data frame
-# 
-getNgram <- function(x, words, decoded=TRUE){
-    # gets the correspondign n-grams 
-    
-    if (length(words) >= 4) {
-        y <- with(x, x[W1 == words[1] & W2 == words[2] &
-                           W3 == words[3] & W4 == words[4],])   # for 4-grams        
-    } else {
-        
-        if (length(words) >= 3) {
-            y <- with(x, x[W1 == words[1] & W2 == words[2] & W3 == words[3],])   # for trigrams        
-        } else {
-            
-            if (length(words) >= 2) {
-                y <- with(x, x[W1 == words[1] & W2 == words[2],])          # for bigrams                    
-            } else {
-                
-                if(length(words) >= 1) {
-                    y <- with(x, x[W1 == words[1],])                       # for words                    
-                    # y <- with(x, x[W1 == words[1],])                     # for words        
-                } else {
-                    return(NULL)
-                }
-            }
-        }
-    }
-    if(nrow(y) > 0) {
-        if (decoded){
-            for(i in 3:ncol(x)){
-                y[,i] <- dCode(y[,i])
-            }
-        }
-    }
-            
-    return(y[order(y$Count, decreasing=T),])
 }
 # 
 repUnk <- function(x, vocab=WRDS, unkMark='<UNK>'){
@@ -523,6 +494,9 @@ nCode2 <- function(x, vocab=WRDS_H, unkMark='<UNK>',
     names(res) <- NULL                                 # remove names
     return(res)                                        # and go home.
 }
+# for compatibility with old versions
+nCode <- function(x, vocab=WRDS, unkMark='<UNK>')
+    return(nCode2(x, vocab=WRDS_H, unkMark='<UNK>'))
 
 # a shorthand version for decoding
 dCode <- function(x) {nCode2(x, decode=T)}  
@@ -561,18 +535,6 @@ skip.ngram <- function(x, n=2, window=3, split=" ", sep="::"){
     if (n < 2)                                    # just return input words
         return(words)                             # or empty vector
     return(ngrm(words, n, window, sep, ngrams))   # not a trivial case. call generator.    
-}
-#
-# tryNgram - Gets ngrams from n-gram data frame taking encoded or plain words
-#
-tryNgram <- function(words, n = 2,  df = NULL){
-    if (class(words) == 'character')                      # encode words if necessary
-        words <- nCode(words)
-    if (is.null(df)) {
-        df <- paste0('n', n, 'g_df')                      # point to n-gram data frame 
-        df <- get(df)
-    }
-    return(getNgram(df, words))
 }
 #
 # updt.DF - Updates ngram data frames
