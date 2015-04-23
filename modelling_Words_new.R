@@ -2,7 +2,7 @@
 #'
 #' Capstone Project
 #' 
-#' Task 3 - Modeling - 9: blogs data set
+#' Task 3 - Modeling - version C: blogs data set
 #' Model based on n-grams. 
 #'
 #'
@@ -13,18 +13,22 @@
 # --------                            ------------------------------------------------
 AWS = FALSE;                          # Computer running script: AWS or own
 DSET = 1;                             # Blogs=1, News = 2, Tweets=3
-TRAINPROP = 0.25;                     # Proportion of data set to be used as training set
+TRAINPROP = 0.50;                     # Proportion of data set to be used as training set
 SEED_N = 191;                         # Seed for random operations
 nCode_STEPS = 10;                     # Number of steps to encode training data
 REC_LIMIT = 1;                        # Proportion of records to process in this run
 EXPRS_N = 100000;                     # limit on number of nested expr to be evaluated
-ngram_THRESH = 2;                     # Min frequency of ngrams to keep
+ngram_THRESH = 1;                     # Min frequency of ngrams to keep
 CHUNK_PROP = 0.1;                     # Default chunk size for chopping function
 UNK_LMT = 0.000;                      # quantile limit to replace for <UNK>
-VOCAB = 'WRDS_H'                      # Name of hash table used as Vocab
-VOCAB_INV = 'WRDS_H_INV'              # Name of inverted hash table vocabulary
+VOCAB = 'WRDS_H';                     # Name of hash table used as Vocab
+VOCAB_INV = 'WRDS_I';                 # Name of inverted hash table vocabulary
 TOT_RUNS = 100;                       # Total number of training runs
-RUN_NR = 6;                           # Current run number       
+SAVE_ENV = TRUE;                      # Save environment when done?
+RUN_NR = 22;                          # Current run number       
+FROM_REC =  end_rec + 1;              # Process from this point on. Defined by Run Nr if 0.
+N_RECS =  29644;                      # Used if FROM_REC not zero.
+COMPACT_VOCAB = TRUE;                 # To get rid of low frequency terms
 # --------                            ------------------------------------------------
 
 cat('>>> Script settings. \n')
@@ -37,18 +41,26 @@ cat('    REC_LIMIT =', REC_LIMIT, '\n')
 cat('    EXPRS_N =', EXPRS_N, '\n')
 cat('    ngram_THRESH =', ngram_THRESH, '\n')
 cat('    CHUNK_PROP =', CHUNK_PROP, '\n')
+cat('    UNK_LMT =', UNK_LMT, '\n')
 cat('    VOCAB =', VOCAB, '\n')
 cat('    VOCAB_INV =', VOCAB_INV, '\n')
 cat('    TOT_RUNS =', TOT_RUNS, '\n')
+cat('    SAVE_ENV =', SAVE_ENV, '\n')
 cat('    RUN_NR =', RUN_NR, '\n')
+cat('    FROM_REC =', FROM_REC, '\n')
+cat('    N_RECS =', N_RECS, '\n')
 
 # ---
-cat(">>> Basic setup. \n")
+cat("\n>>> Setting up environment and directories. \n")
+
 if (AWS) {
     setwd("~/gsk1")
 } else {
     setwd("~/../Google Drive 2/Training/DataScience/CapstonePj")
 }
+
+cat("    Running on AWS: ", AWS, '.\n', sep = '')
+cat("    Current dir is: ", getwd(), '.\n', sep = '')
 
 library(tm)
 library(hash)
@@ -63,35 +75,43 @@ source("./AWS/nCodeNgram.R")
 
 # --- Check if Run Nr and Params ok
 if (exists('LAST_RUN'))
-    cat('>>> Last RUN Found is ', LAST_RUN, '. \n', sep='')
+    cat('>>> Last RUN Found is ', LAST_RUN, 
+        '. Current RUN Nr is: ', RUN_NR, '.\n', sep='')
 pause("Continue?")     
 
 # --- increase options setting for recursive functions
 options(expressions=EXPRS_N)
 
-# ---
+# --- Getting data set and training data
 sourceDir = './DataSets'
 LANG = 'eng'
-cat(">>> Loading corpus. \n")
+LOAD_CORP = TRUE
 
-if (file.access('Corpus_en', 4) == 0) {
-  cat('>>> Loading object from disk. \n')
-  load('Corpus_en')
-} else {
-  cat('>>> Creating Corpus from source directory. \n')
-  crp <- Corpus(DirSource(sourceDir, encoding = "UTF-8"), 
-                readerControl = list(language = LANG))
+if (exists('trSet')){
+    cat('>>> Using existing data set for training. \n')
+    LOAD_CORP = FALSE
 }
 
-# --- Getting data set and training data
-cat('>>> Getting data set and training data. \n')
-dset <- crp[[DSET]]
-if (AWS)                                    
-    dset <- unlist(dset[1]) 
+if (LOAD_CORP){
+    cat(">>> Loading corpus. \n")
+    
+    if (file.access('Corpus_en', 4) == 0) {
+        cat('>>> Loading object from disk. \n')
+        load('Corpus_en')
+    } else {
+        cat('>>> Creating Corpus from source directory. \n')
+        crp <- Corpus(DirSource(sourceDir, encoding = "UTF-8"), 
+                      readerControl = list(language = LANG))
+    }   
 
-if (file.access('Corpus_en', 0) == -1)
-  save(crp, file='Corpus_en')
-rm(crp); gc()
+    cat('>>> Getting data set and training data. \n')
+    dset <- crp[[DSET]]
+    if (AWS)                                    
+        dset <- unlist(dset[1]) 
+    if (file.access('Corpus_en', 0) == -1)
+        save(crp, file='Corpus_en')
+    rm(crp); gc()
+}
 
 # --- Creating / updating training data set
 if(RUN_NR == 1) {
@@ -100,26 +120,35 @@ if(RUN_NR == 1) {
     trSet <- dset[train]    
 }
 
-RunSize <- length(trSet) %/% TOT_RUNS
-strt_rec <- 1 + (RUN_NR - 1) * RunSize
-end_rec <- RUN_NR * RunSize
-trData <- trSet[strt_rec:end_rec]
+RunSize <- length(trSet) %/% TOT_RUNS                       # Size of chunk of data to train
+if (FROM_REC == 0) {
+    strt_rec <- 1 + (RUN_NR - 1) * RunSize                  # Determine first record in chunk
+    run_end_rec <- RUN_NR * RunSize                         # and final record
+} else {
+    strt_rec <- FROM_REC
+    run_end_rec <- strt_rec + N_RECS - 1
+}
 
-cat('\n>>> Run Nr: ', RUN_NR, '. From Rec ', 
-    strt_rec, ' To ', end_rec, '. \n\n', sep='')
+trData <- trSet[strt_rec:run_end_rec]                       # set up data to train
 
-# --- Cleaning training set
-ctrlList <- list(convertTolower=c(TRUE, 3),
+cat('\n>>> Run Nr: ', RUN_NR, '. From Rec ',                # Log it
+    strt_rec, ' To ', run_end_rec, '. \n\n', sep='')
+pause('Continue?')                                          # Wait for ok
+end_rec <- run_end_rec                                      # if ok update end record indicator
+
+# --- Cleaning training set                            
+ctrlList <- list(convertTolower=c(TRUE, 3),                 # data cleaning parameters
                  verbose=TRUE,
                  convertToASCII=TRUE,
                  removePunct=TRUE,
                  removeNumbers=TRUE,
                  removeStopWords=c(FALSE, NULL))
 
-trData <- cleanDoc(x=trData, control=ctrlList)
+trData <- cleanDoc(x=trData, control=ctrlList)             # Clean data
 
-# --- 
-strt <- Sys.time()
+# --- Vocabulary creation or update
+strt <- Sys.time()            
+
 action <- 'Updating'
 if(RUN_NR == 1)
     action <- 'Creating'
@@ -131,7 +160,7 @@ ngramLst <- Ngram.tf(x = trData,
                      n = 1,
                      encoded = FALSE,
                      encode = FALSE,
-                     threshold = 2, 
+                     threshold = ngram_THRESH, 
                      chunkSize = 0.1)
 
 n1g <- ngramLst[[1]]
@@ -156,15 +185,19 @@ names(n1g_u)[1] <- '<UNK>'                                  # add name as <UNK>
 n1g_u <- n1g_u[order(n1g_u)]                                # restore order
 
 # --- Creating / updating vocab 
-cat('    Creating / updating hash table VOCAB. \n')
+cat('    Creating / updating hash table ', VOCAB, '. \n', sep='')
 
 WRDS <- names(n1g_u[order(n1g_u, decreasing=T)])            # word character vector  
 if(RUN_NR == 1){                                            # Create Vocab from scratch
     WRDS_H <- hash(WRDS, 1:length(WRDS))
-    WRDS_H_INV <- hash(values(WRDS_H), keys(WRDS_H))
+    WRDS_I <- invertVocab(WRDS_H)
     cat('    New Vocab created with', length(WRDS), 'types. \n')
 } else {                                                    # Update existing Vocab
-    new_words <- updt.Vocab(WRDS)
+    # new_words <- updt.Vocab(WRDS)
+    updtList <- updt.Vocab(WRDS, Vocab_inv = WRDS_I)        # update vocab and inv vocab
+    new_words <- updtList[[1]]                              # get nr of words added
+    if (new_words > 0)
+        WRDS_I <- updtList[[2]]                             # and inverted Vocab vector
     cat('    Vocab updated with', new_words, 'new types. \n')
 }
 (elapsed <- Sys.time() - strt)
@@ -197,107 +230,23 @@ ngramLst <- Ngram.tf(x = trData,                    # input data
                      chunkSize = CHUNK_PROP)        # chunk size to process by steps
 
 n1gn <- ngramLst[[1]]                               # extract ngram dict from lst
-n1gnp <- ngramLst[[2]]                              # and ngram probabilities
+n1gnp <- ngramLst[[2]]   
+# and ngram probabilities
 T1n <- length(n1gn)                                 # Number of Types
 N1n <- sum(n1gn)                                    # Number of tokens
 
 if (RUN_NR == 1) {
     n1gn_df <- ngram.DF(n1gn)                       # create data frame
-    n1gn_added <- length(n1gn)
-    n1gn_updted <- 0
+    n1gn_added <- length(n1gn)                      # term statistics. terms added.
+    n1gn_updted <- 0                                # no terms updated
 } else {
     res <- updt.DF(n1gn_df, n1gn)                   # update data frame
-    n1gn_df <- res$df            
-    n1gn_added <- res$added
-    n1gn_updted <- res$updted
+    n1gn_df <- res$df                               # get data frame
+    n1gn_added <- res$added                         # total terms added
+    n1gn_updted <- res$updted                       # total terms updated
+    n1gn_df$Prob <- getProb(n1gn_df$Count)          # update probabilities
+    n1gn_df$ProbWB <- getProbWB(n1gn_df$Count)      # update Witten Belt discounted probs
 }
-
-# --- bigrams
-cat('>>> Creating bigrams. \n')
-ngramLst <- Ngram.tf(x = trData_n, 
-                     n = 2, 
-                     fun = ngram2,
-                     encoded = TRUE,
-                     encode = TRUE,
-                     threshold = ngram_THRESH, 
-                     chunkSize = CHUNK_PROP)
-
-n2gn <- ngramLst[[1]]
-n2gnp <- ngramLst[[2]]
-T2n <- length(n2gn)        # Number of Types
-N2n <- sum(n2gn)           # Number of tokens
-
-if (RUN_NR == 1) {
-    n2gn_df <- ngram.DF(n2gn)                       # create data frame    
-    n2gn_added <- length(n2gn)
-    n2gn_updted <- 0    
-} else {
-    res <- updt.DF(n2gn_df, n2gn)                   # update data frame
-    n2gn_df <- res$df
-    n2gn_added <- res$added
-    n2gn_updted <- res$updted
-}               
-
-# --- trigrams
-cat('>>> Creating trigrams. \n')
-ngramLst <- Ngram.tf(x = trData_n, 
-                     n = 3, 
-                     fun = ngram2,
-                     encoded = TRUE,
-                     encode = TRUE,
-                     threshold = ngram_THRESH, 
-                     chunkSize = CHUNK_PROP)
-
-n3gn <- ngramLst[[1]]
-n3gnp <- ngramLst[[2]]
-T3n <- length(n3gn)    # Number of Types
-N3n <- sum(n3gn)       # Number of tokens
-
-if (RUN_NR == 1) {
-    n3gn_df <- ngram.DF(n3gn)                       # create data frame
-    n3gn_added <- length(n3gn)
-    n3gn_updted <- 0
-} else {
-    res <- updt.DF(n3gn_df, n3gn)                   # update data frame
-    n3gn_df <- res$df
-    n3gn_added <- res$added
-    n3gn_updted <- res$updted
-}
-
-# --- skip 2-grams
-cat('>>> Creating skip bigrams. \n')
-
-cat('    Removing stopwords. \n')
-myStopWords_n <- nCode2(myStopWords)                         
-trData_n_nstp <- lapply(trData_n, 
-                        function(x, rmList) {x[!(x %in% rmList)]}, 
-                        myStopWords_n)
-
-cat('    creating skip bigrams. \n')
-ngramLst <- Ngram.tf(x = trData_n_nstp,               # input data        
-                     n = 2,                           # bigrams
-                     fun = skip.ngram2,               # use skip function
-                     window = 3,                      # window size for skip bigrams
-                     encoded = TRUE,                  # data is already encoded
-                     encode = TRUE,                   # encode bigrams
-                     threshold = ngram_THRESH,        # discard low frequency ngrams 
-                     chunkSize = CHUNK_PROP)          # process data in chunks 
-
-n2sn <- ngramLst[[1]]
-n2snp <- ngramLst[[2]]
-T2sn <- length(n2sn)        
-N2sn<- sum(n2sn)            
-
-if (RUN_NR == 1) {
-    n2sn_df <- ngram.DF(n2sn)                       # create data frame
-    n2sn_added <- length(n2sn)
-    n2sn_updted <- 0
-} else {
-    res <- updt.DF(n2sn_df, n2sn)                   # update data frame
-    n2sn_df <- res$df
-    n2sn_added <- res$added
-    n2sn_updted <- res$updted
-}           
 
 # --- End of process data
 cat('\n>>> Run Nr. ', RUN_NR, ' completed OK. (Recs ', 
@@ -307,23 +256,27 @@ cat('Types added: ', n1gn_added,
     '. Updated: ', n1gn_updted,
     '. Total: ', nrow(n1gn_df), '. \n', sep='')
 
-cat('Bigrams added: ', n2gn_added,
-    '. Updated: ', n2gn_updted,
-    '. Total: ', nrow(n2gn_df), '. \n', sep='')
+# Compacting Vocabs
+if (COMPACT_VOCAB){
+    cat('\n>>> Compacting Vocabulary and 1-gram data frame. \n')
+    cList <- compactWords(df = n1gn_df, thresHold = 1, talk=T)
+    n1gn_df <- cList[[1]]
+    WRDS_H <- cList[[2]]
+    WRDS_I <- cList[[3]]
+}
 
-cat('Trigrams added: ', n3gn_added,
-    '. Updated: ', n3gn_updted,
-    '. Total: ', nrow(n3gn_df), '. \n', sep='')
-
-cat('Skip Bigrams added: ', n2sn_added,
-    '. Updated: ', n2sn_updted,
-    '. Total: ', nrow(n2sn_df), '. \n', sep='')
+if (length(WRDS_H) > 1e+5)
+    cat('WARNING. Vocab is >1e+5 and should be compacted. \n')
 
 # --- Save run and environment
 LAST_RUN <- RUN_NR
-env_name <- paste0('./env_run_', RUN_NR, '.RData')
-cat('Saving environment as ', env_name, 
-    '. This may take some time. \n', sep='')
-save.image(env_name)
+if (SAVE_ENV) {
+    env_name <- paste0('./n1gn_env_run_', RUN_NR, '.RData')
+    cat('Saving environment as ', env_name, 
+        '. This may take some time. \n', sep='')
+    save.image(env_name)    
+} else {
+    cat('WARNING. Environment will not be saved.\n')
+}
 
 # --- End of script 

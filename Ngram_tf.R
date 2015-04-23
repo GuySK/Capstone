@@ -23,8 +23,8 @@ Ngram.tf <- function(x, n=2,
                      encode=encode,
                      window=window)       
     
-    ngrams <- unlist(ngrams)
-    names(ngrams) <- NULL
+    ngrams <- unlist(ngrams, use.names = F)
+    # names(ngrams) <- NULL
     cat('   ', length(ngrams), 'terms generated. \n')
     
     cat('>>> Estimating time for main process. \n')
@@ -49,26 +49,49 @@ Ngram.tf <- function(x, n=2,
     cat('>>> Terms integrity checked OK \n')
     
     cat('>>> Creating term frequencies dicts. \n')
-    ndLst <- list()
+    
+    if (encoded || encode){                                    # ngrams in code format
+        ndTot <- matrix(data = 0, nrow = 0, ncol = 2)            # use matrix as dict output
+        colnames(ndTot) <- c('Code', 'Count')        
+    } else {                                                   # ngrams not encoded
+        ndLst <- list()                                          # use list as dict output
+            }
+    
     for (i in 1:length(ngramsLst)){
+
         cat('    Processing list', i, 'with', length(ngramsLst[[i]]), 'terms. \n' )
         nd <- dict(ngramsLst[[i]])
-        nd2 <- nd[nd >= threshold]
-        if (length(nd2) == 0) {
-            cat('>>> No terms above threshold. Threshold downsized to 1. \n')
-            nd2 <- nd
+        
+        if (encoded || encode){
+            nd2 <- nd[nd[, 'Count'] >= threshold,]
+            if (nrow(nd2) == 0) {
+                cat('>>> No terms above threshold. Threshold downsized to 1. \n')
+                nd2 <- nd
+            }
+            ndTot <- rbind(ndTot, nd2)
+        } else {
+            nd2 <- nd[nd >= threshold]
+            if (length(nd2) == 0) {
+                cat('>>> No terms above threshold. Threshold downsized to 1. \n')
+                nd2 <- nd        
+            }
+            ndLst <- append(ndLst, list(nd2))
         }
-        ndLst <- append(ndLst, list(nd2))
     }
     
     cat('>>> Clearing memory and unlisting dicts. \n')
     rm(ngramsLst); gc()
-    nd <- unlist(ndLst)
-    nd.prob <- nd / length(ngrams)
     
     elapsedTime <- round(Sys.time() - strtTime, 2)
 
     cat('>>> End of Job. Job time was:', elapsedTime, attr(elapsedTime, 'units'), '\n')
-    return(list(nd, nd.prob))
+    
+    if (encoded || encode){
+        return(ndTot)
+    } else {
+        return(unlist(ndLst))
+    }
+    
+    # return(list(Dict = ndTot, Prob = nd.prob))
 }
 

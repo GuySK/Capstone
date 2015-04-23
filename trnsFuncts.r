@@ -11,9 +11,12 @@ myStopWords <- append(myStopWords, c('xxcommaxx', 'xxstopxx', 'xxcolon'))
 #
 convertPunct <- function(x){
     # Takes a string and returns a string.    
-    x <- gsub(pattern = ", ", " xxcommaxx ", x)
+    x <- gsub(pattern = ", |,$", " xxcommaxx ", x)
     x <- gsub(pattern = "\\. |; |! ", " xxstopxx ", x)
-    x <- gsub(pattern = ": ", " xxcolonxx ", x)        
+    x <- gsub(pattern = "\\.$", " xxstopxx ", x)
+    x <- gsub(pattern = "\\;$", " xxstopxx ", x)
+    x <- gsub(pattern = "\\!$", " xxstopxx ", x)
+    x <- gsub(pattern = ": |:$", " xxcolonxx ", x)        
     return(x)
 }
 
@@ -42,12 +45,20 @@ cleanDoc <- function(x, control=list(convertTolower=c(TRUE, 1),
         if (!(names(defaults)[i] %in% names(control)))
             control <- append(control, defaults[i])
     }
+    
     if (control$verbose)
         cat('>>> cleaning document. Control options are: \n')
     for (i in 1:length(names(control))){
         if (control$verbose)
             cat('---', names(control)[i], unlist(control[[i]]), '\n')        
     }
+    
+    if (control$convertToASCII) {
+        if (control$verbose) 
+            cat('>>> getting rid of strange characters. \n')
+        x <- map(x, toascii, progress=T, encoding='UTF-8')        
+    }
+    
     if (control$verbose) 
         cat('>>> Converting special characters. \n')    
     x <- convertPunct(x)
@@ -77,13 +88,7 @@ cleanDoc <- function(x, control=list(convertTolower=c(TRUE, 1),
             cat('>>> removing punctuation  \n')
         x <- removePunctuation(x)
     }
-    
-    if (control$convertToASCII) {
-        if (control$verbose) 
-            cat('>>> getting rid of strange characters. \n')
-        x <- map(x, toascii, progress=T, encoding='UTF-8')        
-    }
-    
+        
     if (control$verbose) 
         cat('>>> End of Job. \n')
     return(x)
@@ -111,7 +116,11 @@ cleanSent <- function(x, control=list(convertTolower=c(TRUE),
         if (!(names(defaults)[i] %in% names(control)))
             control <- append(control, defaults[i])
     }
-
+    
+    if (control$convertToASCII) {
+        x <- toascii(x, encoding='UTF-8')        
+    }
+    
     x <- convertPunct(x)
     
     if(control$convertTolower)
@@ -127,11 +136,7 @@ cleanSent <- function(x, control=list(convertTolower=c(TRUE),
     if (control$removePunct) {
         x <- removePunctuation(x)
     }
-    
-    if (control$convertToASCII) {
-        x <- toascii(x, encoding='UTF-8')        
-    }
-    
+        
     return(x)
 }
 #

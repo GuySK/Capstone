@@ -198,7 +198,7 @@ getCorpusInfo <- function(crp){
 #'
 #' dict -  Creates a dictionary of elements and counts
 #'
-dict <- function(x){
+dict_c <- function(x){
     x <- x[order(x)]
     y <- rep(0, length(unique(x)))
     j <- 1
@@ -212,6 +212,60 @@ dict <- function(x){
     }
     y
 }
+#'
+#' dict -  Creates a dictionary of elements and counts
+#'         in matrix format.
+#'
+dict_n <- function(x){
+    #
+    # Takes a vector of ngrams codes and computes their frequencies.
+    # Returns a matrix with Codes and Counts.
+    # 
+    x <- x[order(x)]                         # sort input vector
+    
+    y <- matrix(data = 0,                    # create output matrix 
+                nrow = length(unique(x)),      # one row for each code
+                ncol=2)                        # and two columns
+    colnames(y) <- c('Code', 'Count')          # name columns
+    
+    j <- 1                                   # init first element
+    y[1, 'Code'] <- x[1]                     # and get first ngram code
+    
+    for (i in 1:length(x)){                  # compute nr of elements for each code    
+        if (x[i] != y[j, 'Code']){             # if code changes 
+            j = j + 1                          # move code pointer
+            y[j, 'Code'] <- x[i]               # and get new code
+        }
+        y[j, 'Count'] <- y[j, 'Count'] + 1     # count element
+    }
+    y                                        # return matrix
+}
+#
+# dict - general dict function. Calls dict_c or dict_n as needed.
+#
+dict <- function(x){
+    if (is.character(x)){
+        return(dict_c(x))
+    } else {
+        return(dict_n(x))
+    }
+}
+#
+# vdict - creates a dictionary of elements and counts
+#       - vectorized version
+#
+vdict <- function(x){
+    y <- rep(0, length(unique(x)))      # create output vector
+    
+    for (i in 1:length(y)){             # process each output entry
+        names(y)[i] <- x[1]             # assign entry name
+        idxx <- names(y)[i] == x        # get index
+        y[i] <- sum(idxx)               # add counts
+        x <- x[-idxx]                   # remove processed entries from input
+    }
+    y                                   # return output vector
+}
+
 #'
 #' dict2 -  Creates a dictionary of elements and counts using 
 #'          package hash created by Christopher Brown.
@@ -407,6 +461,9 @@ ngram.DF <- function(x, encoded=TRUE, sep='::') {
             }
         }
         
+        df$Prob <- x / sum(x)                   # add Probability column
+        df$ProbWB <- x / (sum(x) + length(x))   # add Witten Belt discounted probability
+        
     } else {                                    # ngrams are not encoded
         k <- names(x)                           # get keys
         lk <- strsplit(k, sep)                  # split words
@@ -494,6 +551,39 @@ nCode2 <- function(x, vocab=WRDS_H, unkMark='<UNK>',
     names(res) <- NULL                                 # remove names
     return(res)                                        # and go home.
 }
+#
+# nCode2 - Encodes / decodes a word vector using hash package's functions.
+#          Replaces functions nCode and dCode.
+#
+nCode2 <- function(x, vocab=WRDS_H, unkMark='<UNK>', 
+                   decode=FALSE, vocab_dec=WRDS_I){
+    #
+    # Encodes or decodes a vector of words. If decode = TRUE, 
+    # an inverted hash table must be specified as vocab.
+    # Returns a vector of encoded / decoded words.
+    #
+    
+    if(!decode){
+        x <- ngram(x, 1)                                # convert to word vector
+        not_found <-!(has.key(x, vocab))                # identify words without code and..,
+        x[not_found] <- unkMark                         # replace unknown words with special tag
+        res <- sapply(x, function(y){vocab[[y]]})       # get codes    
+        names(res) <- NULL                              # remove names
+        return(res)                                     # and go home.
+    }
+    
+    if (decode) {
+        unkMark <- vocab[[unkMark]]                    # get <UNK> code
+        vocab <- vocab_dec                             # use inverted hash table and...
+        not_found <- is.na(vocab[x])                   # identify words without code and..,
+        x[not_found] <- unkMark                        # replace unknown words UNK tag code
+        res <- sapply(x, function(y){vocab[[y]]})      # get words    
+        names(res) <- NULL                             # remove names
+        return(res)                                    # and go home.
+    }
+}
+
+#
 # for compatibility with old versions
 nCode <- function(x, vocab=WRDS, unkMark='<UNK>')
     return(nCode2(x, vocab=WRDS_H, unkMark='<UNK>'))
@@ -576,7 +666,7 @@ updt.DF <- function(x, y, test=FALSE){
     
     # Add non existing keys
     tot2add <- sum(!yinKeys)                              # Nr of rows to add
-    if (tot2add > 0) {                                    # rbind without rows result in error
+    if (tot2add > 0) {                                    # rbind without rows results in error
         x <- rbind(x, ngram.DF(y[!yinKeys]), row.names=NULL)
         rownames(x) <- NULL
         if (test)
@@ -611,10 +701,10 @@ updt.Vocab <- function(x, Vocab=WRDS, test=FALSE) {
 #
 # updt.Vocab - Using hash package...
 #
-updt.Vocab <- function(x, Vocab=WRDS_H, Vocab_inv=WRDS_H_INV, test=FALSE) {
+updt.Vocab <- function(x, Vocab=WRDS_H, Vocab_inv=WRDS_I, test=FALSE) {
     #
     # Takes a character vector of words and adds inexisting ones 
-    # to Vocab abd to the inverted Vocab hast table.
+    # to Vocab and to the inverted Vocab hast table.
     # Returns the number of words actually added.
     #
     
@@ -625,11 +715,438 @@ updt.Vocab <- function(x, Vocab=WRDS_H, Vocab_inv=WRDS_H_INV, test=FALSE) {
     if (end >= strt) {                              # add new words 
         Vocab[x[new_words]] <- strt:end             # to Vocab
         Vocab_inv[strt:end] <- x[new_words]         # and inverted Vocab
+        inv_Vocab <- invertVocab(Vocab)             # create inv Vocab vector - new
+    } else {
+        inv_Vocab <- c()                            # nothing to return
     }                                
     
     if (test)                                       # useful for testing
         cat('>>> Words added:', paste(x[new_words], collapse='-'), '\n')
     
-    return(sum(new_words))                          # Nr of words added
+    return(list(sum(new_words), inv_Vocab))         # Nr of words added & inv vocab vector
+}
+#
+# invertVocab - Creates an inverted vocabulary - vector format
+#
+invertVocab <- function(vocab = WRDS_H){
+    #
+    # Inverts hash table setting code as index
+    # 
+    
+    invertedVocab <- rep(NA, length(vocab))    # create output vector
+    vals <- values(vocab)                      # get values from Vocab
+    invertedVocab[vals] <- names(vals)         # fill it with corresponding names
+    return(invertedVocab)                      # return inverted Vocab
 }
 
+#
+# Probability functions
+#
+
+# Standard Probability
+getProb <- function(x) x / sum(x)
+
+# Witten Belt discounted probability
+getProbWB <- function(x) x / (sum(x) + length(x))
+
+#
+# nextWord -  Finds most probable word in sentence
+#
+nextWord <- function(sentence, n = 3, talkative = FALSE){
+    #
+    # Retrieves the most probable word using N-grams
+    # Returns the word and its discounted probability
+    # 
+    if (talkative)                                         # debugging mode
+        cat('n=', n, '\n')
+    
+    if (n == 1) 
+        return(n1gn_df[which(max(n1gn_df$ProbWB) == n1gn_df$ProbWB), 'W1'])    
+    
+    df <- paste0('n', n, 'gn_df')                          # ngram data frame name
+    
+    srchNgrams <- ngram2(sentence, n = n-1, encode = T)    # convert sentence to n-grams
+    srch <- srchNgrams[length(srchNgrams)]                 # get the last one
+    candidates <- subset(get(df), Skey == srch)            # search the n-gram data frame 
+    
+    if (nrow(candidates) == 0) {                           # if no results 
+        return(nextWord(sentence, n-1,                     # back off to n-1 n-gram
+                        talkative = talkative)) 
+    }
+    
+    col <- paste0('W', n)                                  # got it, return max prob(W)
+                                                           # with Witten Belt discounting
+    maxProb <- max(candidates$ProbWB)
+    selWord <- candidates[which(candidates$ProbWB == maxProb), col] # get the word
+    
+    if (length(selWord) == 1)                              # No ties, return word
+        return(selWord)
+    
+    selWord_n <- sapply(selWord, nCodeNgram)               # get keys
+    maxProb <- max(n1gn_df[n1gn_df$Key %in% selWord_n, 'ProbWB'])
+    # maxProb <- max(n1gn_df[n1gn_df$W1 %in% selWord, 'ProbWB']) # get max 1-gram probability
+    selWord <- n1gn_df[which(n1gn_df$ProbWB == maxProb), 'W1'] # get most probable word(s)
+    
+    return(selWord[1])                                     # if more than one, return first one
+}
+#
+# predict_word - Predicts next word in a sentence
+#
+predict_word <- function(sentence, silent = FALSE){
+    #
+    
+    if (!silent){
+        cat('\n --->', sentence, '<--- \n')
+    }
+    
+    words <- ngram2(sentence, n = 1, encode = F, encoded = F)
+    predicted <- nextWord(words)
+    
+    return(predicted)
+}
+
+#
+# chooseSent - Cuts a sentence at random for prediction
+#
+chooseSent <- function(words, stopMark = 'xxstopxx'){
+    # words is a vector of words
+    # returns a list with a sentence and its next word
+    
+    if (length(words) == 0)                         # there's nothing to choose from 
+        stop('ERROR. Void sentence. \n')
+    
+    idx <- sample(1:length(words), 1)               # choose one word at random
+    
+    if (idx == 1) {                                 # create a stop if first word chosen
+        words <- c(stopMark, words)
+        idx <- idx + 1
+    }                                         
+    sent <- words[1:(idx - 1)]                      # get sentence to predict  
+                       
+    return(list(sent, words[idx]))                  # return sentence and target word
+}
+
+
+#
+# predictSentences -  Finds most probable word continuation in sentences
+#
+predictSentences <- function(sentences, MaxNgram = 3){
+    #
+    # predictSentences - Predicts sentences 
+    #
+    
+    # clean sentences with standard transformations
+    cat('clean sentences with standard transformations. \n')
+    sents <- cleanSent(sentences)
+    cat('Done. \n')
+    
+    # tokenize sentences
+    cat('tokenize sentences. \n')
+    tokenSents <- lapply(sents, FUN= ngram2, USE.NAMES = F, n=1, encode=F)
+    cat('Done. \n')
+    
+    # choose random subsentence and target word 
+    cat('choose random subsentence and target word. \n')
+    sentList <- lapply(tokenSents, chooseSent)
+    cat('Done. \n')
+    
+    # group all sentences to be predicted together as a char vector
+    cat('group all sentences to be predicted together as a char vector. \n')
+    toPredSents <- sapply(sentList, "[[", 1)
+    cat('Done. \n')
+    
+    # group all target words
+    cat('group all target words. \n')
+    targets <- sapply(sentList, "[[", 2)
+    cat('Done. \n')
+    
+    # predict next word for each sentence
+    cat('predict next word for each sentence. \n')
+    predicts <- sapply(toPredSents, nextWord, n = MaxNgram)
+    cat('Done. \n')
+    
+    # rebuild predicted sentence
+    cat('rebuild predicted sentence. \n')
+    predSents <- sapply(toPredSents, paste, collapse = ' ')
+    cat('Done. \n')
+    
+    # return a list with target and prediction
+    return(data.frame(Target = targets, 
+                      Prediction = predicts, 
+                      Sentence = predSents, 
+                      stringsAsFactors = FALSE))
+}
+
+#
+# getWord - Retrieves a word from 1-gram dataframe.
+#
+getWord <- function(code, df = n1gn_df){
+    #
+    # retrieves word(s) by code.
+    #
+    
+    if (missing(code))
+        return(NULL)
+    
+    if (length(code) > 1)
+        return(sapply(code, getWord, df))
+    
+    return(df[df$Key == code, 'W1'])    
+}
+#
+# getCount - Retrieves a word's count from 1-gram dataframe.
+#
+getCount <- function(code, df = n1gn_df){
+    #
+    # retrieves word(s) by code.
+    #
+    
+    if (missing(code))
+        return(NULL)
+    
+    if (length(code) > 1)
+        return(sapply(code, getCount, df))
+    
+    return(df[df$Key == code, 'Count'])    
+}
+
+#
+# compactWords - Compacts Vocab and n1gram data frame
+#
+
+compactWords <- function(df = n1gn_df,
+                         thresHold = 1,
+                         talkative = FALSE){
+    #
+    # Gets rid of terms with frequencies below the specified threshold
+    # Returns an n1gram data frame, a new Vocab and a new inverted Vocab.
+    #
+    
+    # identify terms to be discarded and create new data frame with the rest
+    unfreq <- df$Count <= thresHold          # identify low frequent terms
+    df_new <- df[!unfreq,]                   # get rid of them
+    nterms <- nrow(df_new)                   # compute new size of Vocab
+    deleted <- nrow(df) - nterms
+    
+    # Abort process if no terms below threshold
+    if (deleted <= 0){
+        cat('Warning. No terms purged. Process terminated. \n')
+        return()   
+    }
+    
+    # Compact keys and replace old ones
+    df_new <- df_new[order(df_new$Count, decreasing=T),]    # sort data frame by frequency
+    df_new$Key <- 1:nrow(df_new)                            # assign new keys
+    
+    # Compute new probabilities; regular and discounted (Witten Bell)
+    df_new$Prob <- getProb(df_new$Count)      # compute term probabilities
+    df_new$ProbWB <- getProbWB(df_new$Count)  # and discounted probabilities
+    prob_unk <- round((1 - sum(df_new$ProbWB)) * 100,2)
+    
+    # re-create hash table for Vocab and inverted vocab vector
+    Vocab <- hash(df_new$W1, df_new$Key)      # new Vocabulary
+    Vocab['<UNK>'] <- nrow(df_new) + 1        # add Unknown code to Vocab
+    Vocab_inv <- invertVocab(vocab = Vocab)   # vocab to search by code
+    
+    if (talkative){
+        cat('Vocab is now ', nterms, ' terms. \n', sep='')
+        cat('Probability of unknown terms: ', prob_unk, '%. \n', sep='' )        
+    }
+    
+    return(list(df_new, Vocab, Vocab_inv))
+}
+#
+# compactWords - Compacts Vocab and n1gram data frame
+#
+
+compactNgramDF <- function(df,
+                         thresHold = 1,
+                         compact_keys = FALSE,
+                         talkative = FALSE){
+    #
+    # Gets rid of terms with frequencies below the specified threshold
+    # Returns an n1gram data frame, a new Vocab and a new inverted Vocab.
+    #
+    
+    # identify terms to be discarded and create new data frame with the rest
+    unfreq <- df$Count <= thresHold          # identify low frequent terms
+    df_new <- df[!unfreq,]                   # get rid of them
+    nterms <- nrow(df_new)                   # compute new size of Vocab
+    deleted <- nrow(df) - nterms
+    
+    
+    
+    # Abort process if no terms below threshold
+    if (deleted <= 0){
+        cat('Warning. No terms purged. Process terminated. \n')
+        return()   
+    }
+    
+    # Compact keys and replace old ones
+    if(compact_keys) {
+        df_new <- df_new[order(df_new$Count, decreasing=T),]    # sort data frame by frequency
+        df_new$Key <- 1:nrow(df_new)                            # assign new keys        
+    }
+    
+    # Compute new probabilities; regular and discounted (Witten Bell)
+    df_new$Prob <- getProb(df_new$Count)      # compute term probabilities
+    df_new$ProbWB <- getProbWB(df_new$Count)  # and discounted probabilities
+    prob_unk <- round((1 - sum(df_new$ProbWB)) * 100,2)
+    
+    if (talkative){
+        cat(deleted, ' terms deleted from data frame. \n', sep='')
+        cat('Data Frame has now ', nterms, ' terms. \n', sep='')        
+        cat('Probability of unknown terms: ', prob_unk, '%. \n', sep='' )        
+    }
+    
+    rownames(df_new) <- NULL
+    return(df_new)
+}
+
+remove_unk <- function(df, unkMark = '<UNK>', talkative = TRUE){
+    #
+    # Removes unknown values from n-gram dataframes.
+    #
+    
+    # to know ngram degree and get corresponding column
+    n <- max(grep('[1-9]', colnames(df)[grep('^W.',  colnames(df))]))
+    col_n <- which(colnames(df) == paste0('W',n))       
+    
+    # remove rows with unknown values at rightmost word
+    to_delete <- df[, col_n] == unkMark
+    df <- df[!to_delete,]
+
+    # talk to them
+    if (talkative) {
+        cat(sum(to_delete), 'rows deleted from data frame. \n')
+    }
+    
+    # recompute probabilities: standard and Witten-Bell
+    df$Prob   <- getProb(df$Count)
+    df$ProbWB <- getProbWB(df$Count)
+
+    # go home
+    return(df)
+}
+
+
+#
+# where -  searches an object in all environments.
+#
+where <- function(name, env = parent.frame()) {
+    if (identical(env, emptyenv())) {
+        # Base case
+        stop("Can't find ", name, call. = FALSE)
+        
+    } else if (exists(name, envir = env, inherits = FALSE)) {
+        # Success case
+        env
+        
+    } else {
+        # Recursive case
+        where(name, parent.env(env))
+        
+    }
+}
+#
+# New ngram.DF and updt.DF due to change in dict output format (matrix)
+#
+
+# ngram.DF - Creates a data frame from a dict of term frequencies
+#            New version. Replace the one above.  
+#
+ngram.DF <- function(x, encoded=TRUE, sep='::') {
+    
+    # Creates a data frame from a dict of frequencies
+    
+    if (encoded) {
+        
+        # k <- as.double(names(x))              # ngram code as key
+        k <- x[, 'Code']                        # due to change in dict output format
+        x <- x[, 'Count']                       # from here on, the same
+        
+        sk <- sapply(k, dCodeNgram,             # get n-1 ngrams 
+                     subngram=T,                # to use as search keys
+                     decode = F)
+        w <- sapply(k, dCodeNgram)              # get a matrix with ngram words as rows 
+        
+        if (class(w) != 'matrix'){              # but check if it's a vector
+            n <- 1                              # yep. it's an 1-gram
+        } else {                                # nope. bigram or greater ngram
+            n <- nrow(w)                        # number of words in ngram
+        }
+        
+        if (n == 1) {                           # for just words add a single column
+            df <- data.frame(Key=k,             # and init data frame
+                             Count=x,           # with no sub key
+                             row.names=NULL, 
+                             stringsAsFactors = FALSE)            
+            df <- data.frame(df, w, stringsAsFactors = FALSE) # add words
+            colnames(df)[3] <- 'W1'             # and column name
+            
+        } else {                                # for high orded ngrams 
+            df <- data.frame(Key=k,             # init data frame with sub key
+                             Count=x, 
+                             Skey=sk,    
+                             row.names=NULL, 
+                             stringsAsFactors = FALSE)
+            for (i in 1:n){                     # add columns for each word in the ngram
+                df <- data.frame(df, w[i,],     
+                                 stringsAsFactors = FALSE)
+                colnames(df)[3+i] <- paste0('W',i)  # add name to data frame column
+            }
+        }
+        
+        df$Prob <- x / sum(x)                   # add Probability column
+        df$ProbWB <- x / (sum(x) + length(x))   # add Witten Belt discounted probability
+        
+    } else {                                    # ngrams are not encoded
+        stop('Unsupported option. Ngrams must be encoded. \n')
+    }
+    
+    return(df)                                 # done. go home.
+}
+# 
+#
+# updt.DF - Updates ngram data frames - vectorized version - 
+#
+updt.DF <- function(x, y, test=FALSE){
+    # Takes a ngram freq df of type nig_df (i=1,2,3...) and a term freq vector.
+    # Returns a data frame of the right type with counts updated and new keys added.
+    
+    # to vectorize df update
+    yinKeys <- y[, 'Code'] %in% x$Key                     # y entries already in x
+    xinKeys <- x$Key %in% y[, 'Code']                     # same from x point of view
+    
+    # Update existing keys
+    x$Count[xinKeys] <- x$Count[xinKeys] + y[yinKeys, 'Count'] # increment existing counters
+    
+    # Add non existing keys
+    tot2add <- sum(!yinKeys)                              # Nr of rows to add
+    if (tot2add > 0) {                                    # rbind without rows results in error
+        x <- rbind(x, ngram.DF(y[!yinKeys,]), row.names=NULL)
+        rownames(x) <- NULL
+        if (test)
+            cat('>>>', tot2add, 'row(s) added to df. \n') # inform nr of rows added
+    }
+    
+    # Return updated data frame in order
+    return(list(added = tot2add, 
+                updted = sum(yinKeys), 
+                df = x[order(x$Key, decreasing=F),]))     # return new df in key order
+}
+#
+df_degree <- function(df){
+    # to know ngram degree and get corresponding column
+    n <- max(grep('[1-9]', colnames(df)[grep('^W.',  colnames(df))]))
+    return(n)    
+}
+#
+word_prob <- function(word, unkMark = '<UNK>'){
+    wcode <- nCode(word)
+    if (wcode != nCode(unkMark)){
+        return(n1gn_df[n1gn_df$Key == wcode, 'ProbWB'])   
+    } else {
+        return(1 - sum(n1gn_df$ProbWB))
+    }
+}
