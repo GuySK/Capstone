@@ -4,4 +4,7 @@ Capstone
 Johns Hopkins Data Science Specialization - Capstone Project
 ---
 
-Files and Code used during the project here.
+Code for Model exploration and training.
+
+**Note:** Code for Data Product in [this repository](https://github.com/GuySK/CapstonePj-DataProduct)
+
